@@ -1,0 +1,27 @@
+### Register (Pendaftaran)
+POST http://localhost:3000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "khaerul ilman",
+  "email": "khaerulilman10@gmail.com",
+  "password": "password123"
+}
+
+### Verifikasi OTP
+POST http://localhost:3000/api/auth/verify-otp
+Content-Type: application/json
+
+{
+  "email": "ilmanclasher@gmail.com",
+  "otp": "2533"
+}
+
+### Login
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "johndoe@example.com",
+  "password": "password123"
+}
