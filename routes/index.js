@@ -43,7 +43,7 @@ router.post("/like-post", authenticateUser, likePost);
 
 // get 
 router.get("/users", authenticateUser, getUsers);
-router.get("/posts", getPosts);
+router.get("/posts",authenticateUser, getPosts);
 
 router.get("/comment/:postId", authenticateUser,getComment);
 
