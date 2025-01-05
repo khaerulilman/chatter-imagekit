@@ -42,9 +42,9 @@ router.post("/create-comment", authenticateUser, createComment);
 router.post("/like-post", authenticateUser, likePost);
 
 // get 
-router.get("/users", authenticateUser, getUsers);
-router.get("/posts",authenticateUser, getPosts);
+router.get("/users", getUsers);
+router.get("/posts", getPosts);
 
-router.get("/comment/:postId", authenticateUser,getComment);
+router.get("/comment/:postId",getComment);
 
 export default router;
