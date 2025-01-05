@@ -22,10 +22,8 @@ const postUpload = multer({ storage: storage });
 // Controller untuk membuat post
 const createPost = async (req, res) => {
   try {
-    // Menangkap data dari body
     const { userId, content } = req.body;
 
-    // Validasi apakah userId dan content ada
     if (!userId || !content) {
       return res.status(400).json({ message: "User ID and content are required" });
     }
@@ -34,24 +32,23 @@ const createPost = async (req, res) => {
     const userExists = await db`
       SELECT 1 FROM users WHERE id = ${userId} LIMIT 1`;
 
+    const tokenBearer = req.header("Authorization")?.replace("Bearer ", "");
+
     if (userExists.length === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const tokenBearer = req.header("Authorization")?.replace("Bearer ", "");
+    // Membuat ID unik menggunakan nanoid
+    const postId = nanoid(); // ID unik menggunakan nanoid
 
     const User = await db`
-      SELECT id, name, email, profile_picture, header_picture, created_at, token
-      FROM users WHERE id = ${userId}
+    SELECT id, name, email, profile_picture, header_picture, created_at, token
+    FROM users WHERE id = ${userId}
     `;
 
-    // Verifikasi token
     if (User[0].token !== tokenBearer) {
       return res.status(401).json({ message: "Token Invalid" });
     }
-
-    // Membuat ID unik menggunakan nanoid
-    const postId = nanoid(); // ID unik menggunakan nanoid
 
     // Proses file image jika ada
     if (req.files && req.files.media) {
@@ -87,7 +84,7 @@ const createPost = async (req, res) => {
         VALUES (${postId}, ${userId}, ${content})
         RETURNING *`;
 
-      return res.status(201).json({ message: "Post created successfully", post: newPost[0] });
+      return res.status(201).json({ message: "Post created successfully", post: newPost[0] , token: User[0].token });
     }
   } catch (error) {
     return res.status(500).json({ message: "Server error", error: error.message });
