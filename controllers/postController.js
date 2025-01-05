@@ -24,8 +24,12 @@ const createPost = async (req, res) => {
   try {
     const { userId, content } = req.body;
 
-    if (!userId || !content) {
+    if (!userId) {
       return res.status(400).json({ message: "User ID and content are required" });
+    }
+
+    if (!content){
+      return res.status(400).json({ message: "content are required" });
     }
 
     // Verifikasi apakah userId ada di tabel users
