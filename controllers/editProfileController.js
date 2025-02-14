@@ -13,14 +13,12 @@ const imagekit = new ImageKit({
 const profileUpload = multer();
 
 const updateProfile = async (req, res) => {
-  const { userId, name, oldPassword, newPassword } = req.body;
-
   try {
+    // Ambil userId dari req.user (hasil ekstrak JWT)
+    const userId = req.user.id;
+
     // Ambil data user dari database
     const user = await db`SELECT * FROM users WHERE id = ${userId}`;
-
-    // dapatkan token bearer
-    const tokenBearer = req.header("Authorization")?.replace("Bearer ", "");
 
     if (user.length === 0) {
       return res.status(404).json({ message: "Pengguna tidak ditemukan" });
@@ -28,28 +26,15 @@ const updateProfile = async (req, res) => {
 
     const currentUser = user[0];
 
-    if (user[0].token !== tokenBearer) {
-      return res.status(401).json({ message: "Token Invalid" });
-    }
-
-    // Jika ingin mengubah password, verifikasi password lama terlebih dahulu
-    if (oldPassword && newPassword) {
-      const isMatch = await bcrypt.compare(oldPassword, currentUser.password);
-
-      if (!isMatch) {
-        return res.status(400).json({ message: "Password lama tidak cocok" });
-      }
-
-      // Hash password baru
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-      // Perbarui password di database
-      await db`UPDATE users SET password = ${hashedPassword} WHERE id = ${userId}`;
-    }
-
     // Perbarui nama pengguna jika ada
-    if (name) {
-      await db`UPDATE users SET name = ${name} WHERE id = ${userId}`;
+    if (req.body.name) {
+      await db`UPDATE users SET name = ${req.body.name} WHERE id = ${userId}`;
+    }
+
+    // Jika ada password baru, hash dan perbarui password
+    if (req.body.password) {
+      const hashedPassword = await bcrypt.hash(req.body.password, 10);
+      await db`UPDATE users SET password = ${hashedPassword} WHERE id = ${userId}`;
     }
 
     // Proses file upload ke ImageKit (jika ada file)
@@ -64,20 +49,15 @@ const updateProfile = async (req, res) => {
         // Hapus foto profile lama jika ada
         if (currentUser.profile_picture) {
           try {
-            const fileId = currentUser.profile_picture.split('/').pop().split('.')[0];
-            await new Promise((resolve, reject) => {
-              imagekit.deleteFile(fileId, (error) => {
-                if (error) {
-                  console.error("Error deleting old profile picture:", error);
-                  reject(error);
-                }
-                console.log("Old profile picture deleted successfully");
-                resolve();
-              });
-            });
+            const fileId = currentUser.profile_picture
+              .split("/")
+              .pop()
+              .split(".")[0];
+            await imagekit.deleteFile(fileId);
+            console.log("Old profile picture deleted successfully");
           } catch (deleteError) {
             console.error("Failed to delete old profile picture:", deleteError);
-            // Continue with upload even if delete fails
+            // Lanjutkan upload meskipun gagal menghapus
           }
         }
 
@@ -85,7 +65,7 @@ const updateProfile = async (req, res) => {
         const fotoProfileResult = await imagekit.upload({
           file: profile_picture[0].buffer,
           fileName: `profile_${userId}_${Date.now()}`,
-          folder: "/users/profile"
+          folder: "/users/profile",
         });
         fotoProfileUrl = fotoProfileResult.url;
 
@@ -98,20 +78,15 @@ const updateProfile = async (req, res) => {
         // Hapus header picture lama jika ada
         if (currentUser.header_picture) {
           try {
-            const fileId = currentUser.header_picture.split('/').pop().split('.')[0];
-            await new Promise((resolve, reject) => {
-              imagekit.deleteFile(fileId, (error) => {
-                if (error) {
-                  console.error("Error deleting old header picture:", error);
-                  reject(error);
-                }
-                console.log("Old header picture deleted successfully");
-                resolve();
-              });
-            });
+            const fileId = currentUser.header_picture
+              .split("/")
+              .pop()
+              .split(".")[0];
+            await imagekit.deleteFile(fileId);
+            console.log("Old header picture deleted successfully");
           } catch (deleteError) {
             console.error("Failed to delete old header picture:", deleteError);
-            // Continue with upload even if delete fails
+            // Lanjutkan upload meskipun gagal menghapus
           }
         }
 
@@ -119,7 +94,7 @@ const updateProfile = async (req, res) => {
         const headerProfileResult = await imagekit.upload({
           file: header_picture[0].buffer,
           fileName: `header_${userId}_${Date.now()}`,
-          folder: "/users/header"
+          folder: "/users/header",
         });
         headerUrl = headerProfileResult.url;
 
@@ -128,28 +103,19 @@ const updateProfile = async (req, res) => {
       }
     }
 
-    // Ambil data user yang sudah diperbarui, termasuk token
+    // Ambil data user yang sudah diperbarui
     const updatedUser = await db`
-      SELECT id, name, email, profile_picture, header_picture, created_at, token
+      SELECT id, name, email, profile_picture, header_picture, created_at
       FROM users WHERE id = ${userId}
     `;
 
-    // Kirim respons JSON dengan data pengguna dan token
-    res.status(200).json({
-      message: "Profil berhasil diperbarui",
-      data: {
-        id: updatedUser[0].id,
-        name: updatedUser[0].name,
-        email: updatedUser[0].email,
-        profile_picture: updatedUser[0].profile_picture,
-        header_picture: updatedUser[0].header_picture,
-        created_at: updatedUser[0].created_at,
-      },
-      token: updatedUser[0].token,
-    });
+    // Kirim respons JSON dengan data pengguna
+    res.status(200).json({ user: updatedUser[0] });
   } catch (error) {
     console.error("Error updating profile:", error);
-    res.status(500).json({ message: "Gagal memperbarui profil", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Gagal memperbarui profil", error: error.message });
   }
 };
 

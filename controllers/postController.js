@@ -1,8 +1,9 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 import { neon } from "@neondatabase/serverless";
 import ImageKit from "imagekit";
 import multer from "multer";
 import { nanoid } from "nanoid"; // Import nanoid untuk menghasilkan ID unik
+import jwt from "jsonwebtoken"; // Import jwt untuk verifikasi token
 
 dotenv.config();
 
@@ -22,33 +23,38 @@ const postUpload = multer({ storage: storage });
 // Controller untuk membuat post
 const createPost = async (req, res) => {
   try {
-    const { userId, content } = req.body;
+    const { content } = req.body;
 
-    if (!userId || !content) {
-      return res.status(400).json({ message: "User ID and content are required" });
+    if (!content) {
+      return res.status(400).json({ message: "Content is required" });
+    }
+
+    // Ambil token dari header Authorization
+    const tokenBearer = req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!tokenBearer) {
+      return res.status(401).json({ message: "Token not provided" });
+    }
+
+    // Verifikasi token dan ekstrak userId
+    let userId;
+    try {
+      const decoded = jwt.verify(tokenBearer, process.env.JWT_SECRET);
+      userId = decoded.id; // Ambil userId dari payload token
+    } catch (error) {
+      return res.status(401).json({ message: "Token invalid or expired" });
     }
 
     // Verifikasi apakah userId ada di tabel users
     const userExists = await db`
       SELECT 1 FROM users WHERE id = ${userId} LIMIT 1`;
 
-    const tokenBearer = req.header("Authorization")?.replace("Bearer ", "");
-
     if (userExists.length === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Membuat ID unik menggunakan nanoid
-    const postId = nanoid(); // ID unik menggunakan nanoid
-
-    const User = await db`
-    SELECT id, name, email, profile_picture, header_picture, created_at, token
-    FROM users WHERE id = ${userId}
-    `;
-
-    if (User[0].token !== tokenBearer) {
-      return res.status(401).json({ message: "Token Invalid" });
-    }
+    const postId = nanoid();
 
     // Proses file image jika ada
     if (req.files && req.files.media) {
@@ -63,7 +69,9 @@ const createPost = async (req, res) => {
         },
         async (error, result) => {
           if (error) {
-            return res.status(500).json({ message: "ImageKit upload failed", error });
+            return res
+              .status(500)
+              .json({ message: "ImageKit upload failed", error });
           }
 
           const mediaUrl = result.url; // URL file yang dihasilkan oleh ImageKit
@@ -74,7 +82,9 @@ const createPost = async (req, res) => {
             VALUES (${postId}, ${userId}, ${content}, ${mediaUrl})
             RETURNING *`;
 
-          return res.status(201).json({ message: "Post created successfully", post: newPost[0] });
+          return res
+            .status(201)
+            .json({ message: "Post created successfully", post: newPost[0] });
         }
       );
     } else {
@@ -84,10 +94,15 @@ const createPost = async (req, res) => {
         VALUES (${postId}, ${userId}, ${content})
         RETURNING *`;
 
-      return res.status(201).json({ message: "Post created successfully", post: newPost[0] , token: User[0].token });
+      return res.status(201).json({
+        message: "Post created successfully",
+        post: newPost[0],
+      });
     }
   } catch (error) {
-    return res.status(500).json({ message: "Server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
   }
 };
 

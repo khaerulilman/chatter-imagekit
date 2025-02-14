@@ -32,7 +32,9 @@ export const register = async (req, res) => {
 
     // Periksa jika email sedang menunggu verifikasi
     if (unverifiedUsers.has(email)) {
-      return res.status(409).json({ message: "Akun dengan email ini sedang menunggu verifikasi." });
+      return res
+        .status(409)
+        .json({ message: "Akun dengan email ini sedang menunggu verifikasi." });
     }
 
     // Hash password
@@ -97,44 +99,49 @@ export const register = async (req, res) => {
   }
 };
 
-
 // Controller to handle OTP verification
 export const verifyOtp = async (req, res) => {
-    const { email, otp } = req.body;
-  
-    if (!email || !otp) {
-      return res.status(400).json({ message: "Email dan OTP diperlukan." });
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    return res.status(400).json({ message: "Email dan OTP diperlukan." });
+  }
+
+  try {
+    const userData = unverifiedUsers.get(email);
+
+    if (!userData) {
+      return res
+        .status(404)
+        .json({ message: "Email tidak ditemukan dalam data pending." });
     }
-  
-    try {
-      const userData = unverifiedUsers.get(email);
-  
-      if (!userData) {
-        return res.status(404).json({ message: "Email tidak ditemukan dalam data pending." });
-      }
-  
-      if (userData.otp !== parseInt(otp) || Date.now() > userData.otpExpires) {
-        return res.status(400).json({ message: "Kode OTP salah atau telah kadaluarsa." });
-      }
-  
-      unverifiedUsers.delete(email);
-  
-      // Use the custom id when inserting into the database
-      await db`
+
+    if (userData.otp !== parseInt(otp) || Date.now() > userData.otpExpires) {
+      return res
+        .status(400)
+        .json({ message: "Kode OTP salah atau telah kadaluarsa." });
+    }
+
+    unverifiedUsers.delete(email);
+
+    // Use the custom id when inserting into the database
+    await db`
       INSERT INTO users (id, name, email, password, isVerified)
-      VALUES (${userData.id}, ${userData.name}, ${userData.email}, ${userData.password}, ${true})
+      VALUES (${userData.id}, ${userData.name}, ${userData.email}, ${
+      userData.password
+    }, ${true})
       ON CONFLICT (id) DO NOTHING
     `;
-    
-  
-      res.status(200).json({ message: "Email berhasil diverifikasi." });
-    } catch (error) {
-      console.error("Verify OTP error:", error);
-      res.status(500).json({ message: "Verifikasi OTP Gagal", error: error.message });
-    }
-  };
-  
-  
+
+    res.status(200).json({ message: "Email berhasil diverifikasi." });
+  } catch (error) {
+    console.error("Verify OTP error:", error);
+    res
+      .status(500)
+      .json({ message: "Verifikasi OTP Gagal", error: error.message });
+  }
+};
+
 // Controller to handle login
 export const login = async (req, res) => {
   const { email, password } = req.body;
@@ -188,48 +195,3 @@ export const login = async (req, res) => {
     res.status(500).json({ message: "Login Gagal", error: error.message });
   }
 };
-
-export const logout = async (req, res) => {
-  const token = req.header("Authorization")?.replace("Bearer ", "");
-
-  if (!token) {
-    return res.status(401).json({ message: "No token provided" });
-  }
-
-  try {
-    // Get user ID from token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Remove token from user record
-    await db`
-      UPDATE users 
-      SET token = NULL 
-      WHERE id = ${decoded.id}
-    `;
-
-    // Convert JWT expiration to WIB and store in blacklist
-    const tokenExpUTC = new Date(decoded.exp * 1000); // JWT exp as UTC Date
-    const tokenExpWIB = new Date(tokenExpUTC.getTime() + (6 * 60 * 60 * 1000)); // Adjust to WIB (reduce 1 hour)
-
-    await db`
-      INSERT INTO token_blacklist (token, expires_at)
-      VALUES (
-        ${token}, 
-        ${tokenExpWIB.toISOString()}::timestamp
-      )
-    `;
-
-    res.status(200).json({ message: "Logout successful" });
-  } catch (err) {
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ message: "Invalid token" });
-    }
-    console.error("Logout error:", err);
-    res.status(500).json({ message: "Logout failed", error: err.message });
-  }
-};
-
-
-
-
-

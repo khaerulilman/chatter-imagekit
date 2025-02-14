@@ -1,18 +1,20 @@
 import db from "../config/db.js";
+import { nanoid } from "nanoid"; // Import nanoid untuk generate ID
 
 const createComment = async (req, res) => {
   try {
-    const { userId, postId, content } = req.body;
+    const { content } = req.body; // Ambil content dari body
+    const { postId } = req.params; // Ambil postId dari parameter URL
+    const userId = req.user.id; // Ambil userId dari req.user (hasil ekstrak JWT)
 
     // Validasi input
-    if (!userId || !postId || !content) {
+    if (!content || !postId) {
       return res.status(400).json({ message: "All fields are required." });
     }
 
-    // Ambil data pengguna berdasarkan userId
-    const User = await db`SELECT * FROM users WHERE id = ${userId}`;
-    if (User.length === 0) {
-      return res.status(404).json({ message: "User not found." });
+    // Validasi postId sebagai nanoId
+    if (!/^[A-Za-z0-9_-]{21}$/.test(postId)) {
+      return res.status(400).json({ message: "Invalid postId format." });
     }
 
     // Ambil data postingan berdasarkan postId
@@ -21,16 +23,10 @@ const createComment = async (req, res) => {
       return res.status(404).json({ message: "Post not found." });
     }
 
-    // Validasi token
-    const tokenBearer = req.header("Authorization")?.replace("Bearer ", "");
-    if (tokenBearer !== User[0].token) {
-      return res.status(403).json({ message: "Invalid token." });
-    }
-
     // Buat komentar baru
     const newComment = {
-      id: crypto.randomUUID(), // Generate UUID untuk komentar
-      user_id: userId,
+      id: nanoid(), // Generate nanoId untuk komentar
+      user_id: userId, // Gunakan userId dari JWT token
       post_id: postId,
       content,
       created_at: new Date().toISOString(),
@@ -45,7 +41,6 @@ const createComment = async (req, res) => {
     res.status(201).json({
       message: "Comment created successfully.",
       comment: newComment,
-      token:tokenBearer
     });
   } catch (error) {
     console.error("Error creating comment:", error);
@@ -53,4 +48,4 @@ const createComment = async (req, res) => {
   }
 };
 
-export {createComment};
+export { createComment };

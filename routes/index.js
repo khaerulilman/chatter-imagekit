@@ -1,14 +1,15 @@
 import express from "express";
-import { register, verifyOtp, login, logout } from "../controllers/authController.js";
-import { updateProfile , profileUpload} from "../controllers/editProfileController.js";
-import authenticateUser from "../middleware/createToken.js";
+import { register, verifyOtp, login } from "../controllers/authController.js";
 import { createPost, postUpload } from "../controllers/postController.js";
-import {createComment} from "../controllers/commentController.js";
+import { verifyToken } from "../middleware/createToken.js"; // Import middleware
 import { likePost } from "../controllers/likeController.js";
-// get
-import {getUsers} from "../controllers/get/getUsers.js"
 import { getPosts } from "../controllers/get/getPosts.js";
+import { createComment } from "../controllers/commentController.js";
 import { getComment } from "../controllers/get/getComment.js";
+import {
+  updateProfile,
+  profileUpload,
+} from "../controllers/editProfileController.js";
 
 const router = express.Router();
 
@@ -16,35 +17,30 @@ const router = express.Router();
 router.post("/register", register);
 router.post("/verify-otp", verifyOtp);
 router.post("/login", login);
-router.post("/logout/:userId", authenticateUser, logout); 
+router.get("/posts", getPosts);
 
-// Profile routes
-router.put(
+// Route yang dilindungi oleh JWT
+router.post(
+  "/create-post",
+  verifyToken, // Middleware untuk verifikasi token
+  postUpload.fields([{ name: "media", maxCount: 1 }]),
+  createPost
+);
+
+router.post("/like", verifyToken, likePost);
+
+router.post("/posts/:postId/comments", verifyToken, createComment);
+
+router.get("/posts/:postId/comments", verifyToken, getComment);
+
+router.post(
   "/edit-profile",
-  authenticateUser,
   profileUpload.fields([
     { name: "profile_picture", maxCount: 1 },
     { name: "header_picture", maxCount: 1 },
   ]),
+  verifyToken,
   updateProfile
 );
-
-// Route untuk membuat post dengan file upload menggunakan Multer
-router.post(
-  "/create-post",
-  authenticateUser, // Memastikan pengguna sudah terautentikasi
-  postUpload.fields([{ name: "media", maxCount: 1 }]), // Mendukung upload file media
-  createPost
-);
-
-router.post("/create-comment", authenticateUser, createComment);
-
-router.post("/like-post", authenticateUser, likePost);
-
-// get 
-router.get("/users", getUsers);
-router.get("/posts", getPosts);
-
-router.get("/comment/:postId",getComment);
 
 export default router;
